@@ -28,6 +28,7 @@ if os.path.exists(Q_TABLE_FILE):
     q_table = np.load(Q_TABLE_FILE, allow_pickle=True).item()
 else:
     q_table = {}
+    np.save(Q_TABLE_FILE, q_table)  # Ensure the file exists
 
 
 def menu_screen():
@@ -97,13 +98,19 @@ def game_loop(player_color, ai_color):
         elif keys[pygame.K_d]:
             player_dir = (1, 0)
 
-        player_pos.insert(0, (player_pos[0][0] + player_dir[0], player_pos[0][1] + player_dir[1]))
-        ai_pos.insert(0, (ai_pos[0][0] + ai_dir[0], ai_pos[0][1] + ai_dir[1]))
+        new_player_pos = (player_pos[0][0] + player_dir[0], player_pos[0][1] + player_dir[1])
+        new_ai_pos = (ai_pos[0][0] + ai_dir[0], ai_pos[0][1] + ai_dir[1])
 
-        pygame.draw.rect(screen, COLORS[player_color],
-                         (player_pos[0][0] * GRID_SIZE, player_pos[0][1] * GRID_SIZE, GRID_SIZE, GRID_SIZE))
-        pygame.draw.rect(screen, COLORS[ai_color],
-                         (ai_pos[0][0] * GRID_SIZE, ai_pos[0][1] * GRID_SIZE, GRID_SIZE, GRID_SIZE))
+        player_pos.insert(0, new_player_pos)
+        ai_pos.insert(0, new_ai_pos)
+        player_trail.append(new_player_pos)
+        ai_trail.append(new_ai_pos)
+
+        for pos in player_trail:
+            pygame.draw.rect(screen, COLORS[player_color],
+                             (pos[0] * GRID_SIZE, pos[1] * GRID_SIZE, GRID_SIZE, GRID_SIZE))
+        for pos in ai_trail:
+            pygame.draw.rect(screen, COLORS[ai_color], (pos[0] * GRID_SIZE, pos[1] * GRID_SIZE, GRID_SIZE, GRID_SIZE))
 
         pygame.display.flip()
         clock.tick(FPS)
