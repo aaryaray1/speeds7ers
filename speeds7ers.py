@@ -266,9 +266,12 @@ def game_loop(player_color, ai_color):
     player_dir, ai_dir = (1, 0), (-1, 0)
     player_trail, ai_trail = set(), set()
 
-    # Add initial positions to trails
-    player_trail.add(player_pos[0])
-    ai_trail.add(ai_pos[0])
+    # DEBUG: Print initial positions
+    print(f"Initial Player pos: {player_pos[0]}, AI pos: {ai_pos[0]}")
+
+    # Track previous positions to add to trails
+    prev_player_pos = player_pos[0]
+    prev_ai_pos = ai_pos[0]
 
     # Game state
     game_over = False
@@ -284,6 +287,9 @@ def game_loop(player_color, ai_color):
     # AI difficulty settings
     difficulty_levels = ["Easy", "Medium", "Hard", "Expert"]
     current_difficulty = 1  # Medium by default
+
+    # Add a delay before starting the game (1 second)
+    pygame.time.delay(1000)
 
     while running:
         screen.fill((0, 0, 0))
@@ -311,6 +317,15 @@ def game_loop(player_color, ai_color):
                     print(f"Difficulty set to: {difficulty_levels[current_difficulty]}")
 
         if not game_over:
+            # Add previous positions to trails (not the initial positions or current positions)
+            if steps_survived > 0:  # Only after the first move
+                player_trail.add(prev_player_pos)
+                ai_trail.add(prev_ai_pos)
+
+            # Store current positions for next iteration's trail
+            prev_player_pos = player_pos[0]
+            prev_ai_pos = ai_pos[0]
+
             keys = pygame.key.get_pressed()
             if keys[pygame.K_w] and player_dir != (0, 1):  # Prevent 180 degree turns
                 player_dir = (0, -1)
@@ -331,21 +346,21 @@ def game_loop(player_color, ai_color):
             # Filter out actions that would lead to immediate collision
             safe_actions = []
             action_scores = []
-            # Filter out actions that would lead to immediate collision
-            safe_actions = []
-            action_scores = []
 
             for action in available_actions:
                 next_x = ai_pos[0][0] + action[0]
                 next_y = ai_pos[0][1] + action[1]
 
                 # Check if next position is safe
-                if (next_x >= 0 and next_x < COLS and next_y >= 0 and next_y < ROWS and
-                        (next_x, next_y) not in player_trail and (next_x, next_y) not in ai_trail):
-                    safe_actions.append(action)
-                    # Calculate a score for this action
-                    score = evaluate_move(ai_pos[0], action, player_trail, ai_trail)
-                    action_scores.append((action, score))
+                if (next_x < 0 or next_x >= COLS or next_y < 0 or next_y >= ROWS or
+                        (next_x, next_y) in player_trail or (next_x, next_y) in ai_trail):
+                    # Skip unsafe actions
+                    continue
+
+                safe_actions.append(action)
+                # Calculate a score for this action
+                score = evaluate_move(ai_pos[0], action, player_trail, ai_trail)
+                action_scores.append((action, score))
 
             # Adjust exploration based on difficulty
             local_epsilon = EPSILON
@@ -373,10 +388,6 @@ def game_loop(player_color, ai_color):
             new_ai_pos = (ai_pos[0][0] + ai_dir[0], ai_pos[0][1] + ai_dir[1])
             ai_pos.insert(0, new_ai_pos)
 
-            # Add new positions to trails
-            player_trail.add(new_player_pos)
-            ai_trail.add(new_ai_pos)
-
             # Calculate reward
             reward = 0.1  # Small positive reward for surviving
             steps_survived += 1
@@ -402,42 +413,46 @@ def game_loop(player_color, ai_color):
                 game_end = True
                 reward = 5  # Bigger reward for AI when player hits wall
 
-            # 2. Player hitting AI trail or AI directly
-            if new_player_pos in ai_trail:
-                display_message(screen, "Game Over! You collided with the AI!")
+            # 2. Player hitting AI trail
+            elif new_player_pos in ai_trail:
+                display_message(screen, "Game Over! You collided with the AI trail!")
                 # Big reward for AI if player hits it
                 reward = 10
                 game_end = True
 
             # 3. AI hitting player trail
-            if new_ai_pos in player_trail and new_ai_pos != new_player_pos:
+            elif new_ai_pos in player_trail:
                 display_message(screen, "You Win! AI hit your trail!")
                 # Big penalty for hitting player trail
                 reward = -10
                 game_end = True
 
-            # 4. Player hitting own trail (excluding the head)
-            player_trail_without_head = player_trail.copy()
-            if new_player_pos in player_trail_without_head:
+            # 4. Player hitting own trail
+            elif new_player_pos in player_trail:
                 display_message(screen, "Game Over! You hit your own trail!")
                 # Small reward for AI if player makes mistake
                 reward = 3
                 game_end = True
 
             # 5. AI hitting own trail
-            ai_trail_without_head = ai_trail.copy()
-            if new_ai_pos in ai_trail_without_head:
+            elif new_ai_pos in ai_trail:
                 display_message(screen, "You Win! AI hit its own trail!")
                 # Big penalty for hitting own trail
                 reward = -10
                 game_end = True
 
             # 6. AI hitting wall
-            if (new_ai_pos[0] < 0 or new_ai_pos[0] >= COLS or
-                    new_ai_pos[1] < 0 or new_ai_pos[1] >= ROWS):
+            elif (new_ai_pos[0] < 0 or new_ai_pos[0] >= COLS or
+                  new_ai_pos[1] < 0 or new_ai_pos[1] >= ROWS):
                 display_message(screen, "You Win! AI hit the wall!")
                 # Big penalty for hitting wall
                 reward = -10
+                game_end = True
+
+            # 7. Head-on collision (both lose)
+            elif new_player_pos == new_ai_pos:
+                display_message(screen, "Draw! Head-on collision!")
+                reward = 0  # Neutral reward for draw
                 game_end = True
 
             # Update Q-values if in training mode
