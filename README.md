@@ -1,0 +1,1 @@
+Speeds7ers- A Tron/Snake inspired game where you and an AI controlled speedster fight for dominance. The AI is powered by a Deep Q Neural Network that learns over time and starts predicting your moves.
