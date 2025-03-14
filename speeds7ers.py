@@ -37,6 +37,7 @@ import torch.optim as optim
 # =============================================================================
 
 pygame.init()
+screen = pygame.display.set_mode((1280, 720))
 
 # =============================================================================
 #                             GAME CONSTANTS
@@ -49,6 +50,14 @@ FPS = 45
 
 # Power-Up size: reduced from 4 times the grid size (40x40) to 3 times the grid size (30x30)
 POWERUP_SIZE = GRID_SIZE * 3
+
+# Define the scale factor for power-up sprites (set to 7) and update the collision size accordingly.
+SCALE_FACTOR = 7
+POWERUP_COLLISION_SIZE = POWERUP_SIZE * SCALE_FACTOR
+
+# NEW: Define a pickup scale to reduce the collision area (without reducing the sprite size)
+POWERUP_PICKUP_SCALE = 0.5  # For example, 50% of the drawn sprite area
+POWERUP_PICKUP_SIZE = int(POWERUP_COLLISION_SIZE * POWERUP_PICKUP_SCALE)
 
 # Colors dictionary for use in drawing game elements
 COLORS = {
@@ -68,9 +77,28 @@ EPSILON_DECAY = 0.9995  # Epsilon decay factor per training update
 BATCH_SIZE = 64  # Experience replay batch size
 
 # Global difficulty settings (persist across rounds until app restart)
-difficulty_levels = ["Easy", "Medium", "Hard", "Expert", "Nightma   re"]
+difficulty_levels = ["Easy", "Medium", "Hard", "Expert", "Nightmare"]
 current_difficulty = 1  # Default to Medium difficulty
 
+# =============================================================================
+#                     LOAD POWER-UP SPRITES
+# =============================================================================
+
+def load_sprite(filename, scale_factor=1):
+    sprite = pygame.image.load(filename).convert_alpha()
+    new_size = (int(POWERUP_SIZE * scale_factor), int(POWERUP_SIZE * scale_factor))
+    sprite = pygame.transform.scale(sprite, new_size)
+    return sprite
+
+powerup_sprites = {
+    "double_speed": load_sprite("sprites/speed.png", scale_factor=SCALE_FACTOR),
+    "invisibility": load_sprite("sprites/invis.png", scale_factor=SCALE_FACTOR),
+    "wall_phase": load_sprite("sprites/wallphase.png", scale_factor=SCALE_FACTOR),
+    "extra_life": load_sprite("sprites/life.png", scale_factor=SCALE_FACTOR),
+    "ai_confusion": load_sprite("sprites/ai.png", scale_factor=SCALE_FACTOR),
+    "teleport": load_sprite("sprites/tp.png", scale_factor=SCALE_FACTOR),
+    "slow_time": load_sprite("sprites/time.png", scale_factor=SCALE_FACTOR)
+}
 
 # =============================================================================
 #                         EXPERIENCE REPLAY BUFFER CLASS
@@ -81,7 +109,6 @@ class ExperienceReplay:
     Experience Replay buffer that stores past transitions.
     Each transition is a tuple: (state, action, reward, next_state, done)
     """
-
     def __init__(self, capacity=20000):
         self.buffer = []
         self.capacity = capacity
@@ -101,7 +128,6 @@ class ExperienceReplay:
     def __len__(self):
         return len(self.buffer)
 
-
 # =============================================================================
 #                         INITIALIZE REPLAY BUFFER
 # =============================================================================
@@ -115,14 +141,12 @@ replay_buffer = ExperienceReplay()
 # Set up device for PyTorch (GPU if available, else CPU)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-
 class DQNNet(nn.Module):
     """
     A simple feed-forward neural network for approximating Q-values.
     Input dimension: size of state (15 features expected)
     Output dimension: number of actions (len(ACTIONS))
     """
-
     def __init__(self, input_dim, output_dim):
         super(DQNNet, self).__init__()
         self.fc1 = nn.Linear(input_dim, 128)
@@ -136,13 +160,11 @@ class DQNNet(nn.Module):
         x = self.fc3(x)
         return x
 
-
 class DQNAgent:
     """
     The DQN Agent that encapsulates the policy network, target network,
     optimizer, and learning functions.
     """
-
     def __init__(self, input_dim, output_dim, device):
         self.device = device
         self.policy_net = DQNNet(input_dim, output_dim).to(device)
@@ -224,13 +246,11 @@ class DQNAgent:
         self.epsilon = max(self.epsilon_end, self.epsilon * self.epsilon_decay)
         return loss.item()
 
-
 # =============================================================================
 #                       INITIALIZE DQN AGENT & MODEL SAVE/LOAD
 # =============================================================================
 
 agent = DQNAgent(input_dim=15, output_dim=len(ACTIONS), device=device)
-
 
 def save_model():
     """Save the DQN model weights to a file."""
@@ -239,7 +259,6 @@ def save_model():
         print("Saved DQN model.")
     except Exception as e:
         print("Error saving DQN model:", e)
-
 
 def load_model():
     """Load the DQN model weights from a file if available."""
@@ -251,13 +270,10 @@ def load_model():
         except Exception as e:
             print("Error loading DQN model:", e)
 
-
 # Attempt to load an existing model on startup
 load_model()
-
 # Register the model saving function to be called at exit.
 atexit.register(save_model)
-
 
 # =============================================================================
 #                       STATE REPRESENTATION FUNCTION
@@ -332,7 +348,6 @@ def get_state(ai_pos, player_pos, ai_dir, player_trail, ai_trail, invisibility_a
             secondary_dangers[0], secondary_dangers[1], secondary_dangers[2], secondary_dangers[3],
             dir_value, player_dir_value, int(invisibility_active), ai_trail_near, player_trail_near)
 
-
 # =============================================================================
 #                   COUNT OPEN CELLS FUNCTION (LOOKAHEAD)
 # =============================================================================
@@ -363,21 +378,11 @@ def count_open_cells(x, y, direction, player_trail, ai_trail, depth=5):
             queue.append((nx, ny, d - 1))
     return count
 
-
-# =============================================================================
-#                     MOVE EVALUATION WITH LOOKAHEAD
-# =============================================================================
-
 # =============================================================================
 #                     MOVE EVALUATION WITH LOOKAHEAD
 # =============================================================================
 
 def evaluate_move(pos, direction, player_pos, player_dir, player_trail, ai_trail, depth=3):
-    """
-    Evaluate the move from the current position in a given direction.
-    The evaluation considers immediate collisions, open space, proximity
-    to the player, and tactical factors like potential interceptions.
-    """
     if depth == 0:
         return 0
 
@@ -404,19 +409,17 @@ def evaluate_move(pos, direction, player_pos, player_dir, player_trail, ai_trail
     prev_distance = abs(pos[0] - player_pos[0][0]) + abs(pos[1] - player_pos[0][1])
     new_distance = abs(next_x - player_pos[0][0]) + abs(next_y - player_pos[0][1])
     if new_distance < prev_distance:
-        score += 50  # Strong reward for moving closer to the player
+        score += 50  # Reward for moving closer to the player
     else:
         score -= 30  # Penalize moving away from the player
 
     # Bonus for potential interception if close to the player
     if distance_to_player < 10:
-        can_intercept = False
         for d in range(1, 5):
             intercept_x = predicted_player_x + player_dir[0] * d
             intercept_y = predicted_player_y + player_dir[1] * d
             if abs(next_x - intercept_x) + abs(next_y - intercept_y) <= d:
-                can_intercept = True
-                score += 100  # Strong bonus for intercepting the player
+                score += 100  # Bonus for interception
                 break
 
     # Evaluate follow-up moves recursively to avoid dead ends
@@ -427,7 +430,6 @@ def evaluate_move(pos, direction, player_pos, player_dir, player_trail, ai_trail
         follow_up_score = evaluate_move((next_x, next_y), next_dir, player_pos, player_dir,
                                         player_trail, temp_ai_trail, depth - 1)
         follow_up_scores.append(follow_up_score)
-
     if follow_up_scores:
         best_follow_up = max(follow_up_scores)
         score += best_follow_up * 0.7
@@ -439,7 +441,6 @@ def evaluate_move(pos, direction, player_pos, player_dir, player_trail, ai_trail
         if next_x >= COLS - 3: wall_count += 1
         if next_y <= 2: wall_count += 1
         if next_y >= ROWS - 3: wall_count += 1
-
         if wall_count == 1:
             score += 15
         elif wall_count > 1:
@@ -447,6 +448,13 @@ def evaluate_move(pos, direction, player_pos, player_dir, player_trail, ai_trail
 
     # Bonus for momentum: reward continuing in the same direction
     score += 10
+
+    # NEW: Additional penalty for being too close to the AI's own trail
+    if ai_trail:
+        min_trail_distance = min(abs(next_x - t[0]) + abs(next_y - t[1]) for t in ai_trail)
+        # If too close (e.g., less than 3 cells away), impose a heavy penalty.
+        if min_trail_distance < 3:
+            score -= (3 - min_trail_distance) * 200
 
     return score
 
@@ -478,7 +486,6 @@ def create_button(screen, text, position, width, height, color, hover_color):
         pygame.time.delay(200)
         return True
     return False
-
 
 def display_message(screen, message):
     """
@@ -526,7 +533,6 @@ def display_message(screen, message):
             save_model()
             pygame.quit()
             exit()
-
 
 # =============================================================================
 #                             MENU SCREEN
@@ -589,7 +595,6 @@ def menu_screen():
             pygame.quit()
             exit()
 
-
 # =============================================================================
 #                             GAME LOOP FUNCTION
 # =============================================================================
@@ -611,7 +616,7 @@ def game_loop(player_color, ai_color):
     # -------------------- Power-Up System Setup --------------------
     powerups = []
     max_powerups = 3
-    powerup_spawn_probability = 0.005
+    powerup_spawn_probability = 0.1
     powerup_types = ["double_speed", "invisibility", "wall_phase", "extra_life", "ai_confusion", "teleport",
                      "slow_time"]
     POWERUP_DURATIONS = {
@@ -621,6 +626,7 @@ def game_loop(player_color, ai_color):
         "ai_confusion": 150,
         "slow_time": 150
     }
+    # POWERUP_COLORS is still defined if a type is not in the sprites dictionary
     POWERUP_COLORS = {
         "double_speed": (255, 165, 0),
         "invisibility": (128, 128, 128),
@@ -675,9 +681,13 @@ def game_loop(player_color, ai_color):
             if (pu_x, pu_y) not in player_trail and (pu_x, pu_y) not in ai_trail \
                     and (pu_x, pu_y) != player_pos[0] and (pu_x, pu_y) != ai_pos[0]:
                 powerups.append({"type": pu_type, "pos": (pu_x, pu_y)})
+        # Draw power-ups using sprites (if available) or fallback to rectangle
         for pu in powerups:
-            pygame.draw.rect(screen, POWERUP_COLORS[pu["type"]],
-                             (pu["pos"][0] * GRID_SIZE, pu["pos"][1] * GRID_SIZE, POWERUP_SIZE, POWERUP_SIZE))
+            if pu["type"] in powerup_sprites:
+                screen.blit(powerup_sprites[pu["type"]], (pu["pos"][0] * GRID_SIZE, pu["pos"][1] * GRID_SIZE))
+            else:
+                pygame.draw.rect(screen, POWERUP_COLORS[pu["type"]],
+                                 (pu["pos"][0] * GRID_SIZE, pu["pos"][1] * GRID_SIZE, POWERUP_SIZE, POWERUP_SIZE))
         # -------------------------------------------------------------
 
         # -------------------- Display Power-Up Message --------------------
@@ -747,7 +757,11 @@ def game_loop(player_color, ai_color):
             # Collision detection with power-ups using rect collision
             player_rect = pygame.Rect(player_pos[0][0] * GRID_SIZE, player_pos[0][1] * GRID_SIZE, GRID_SIZE, GRID_SIZE)
             for pu in powerups[:]:
-                pu_rect = pygame.Rect(pu["pos"][0] * GRID_SIZE, pu["pos"][1] * GRID_SIZE, POWERUP_SIZE, POWERUP_SIZE)
+                # Instead of using the full collision area, we create a smaller collision rect.
+                drawn_x = pu["pos"][0] * GRID_SIZE
+                drawn_y = pu["pos"][1] * GRID_SIZE
+                offset = (POWERUP_COLLISION_SIZE - POWERUP_PICKUP_SIZE) // 2
+                pu_rect = pygame.Rect(drawn_x + offset, drawn_y + offset, POWERUP_PICKUP_SIZE, POWERUP_PICKUP_SIZE)
                 if player_rect.colliderect(pu_rect):
                     pu_type = pu["type"]
                     powerup_message = f"Power Up: {pu_type.replace('_', ' ').title()}!"
@@ -812,6 +826,7 @@ def game_loop(player_color, ai_color):
             for action in available_actions:
                 next_x = ai_pos[0][0] + action[0]
                 next_y = ai_pos[0][1] + action[1]
+                # Only consider actions that don’t lead to an immediate collision
                 if (next_x < 0 or next_x >= COLS or next_y < 0 or next_y >= ROWS or
                         (next_x, next_y) in player_trail or (next_x, next_y) in ai_trail):
                     continue
@@ -823,33 +838,55 @@ def game_loop(player_color, ai_color):
                         break
                 prev_distance = abs(player_pos[0][0] - ai_pos[0][0]) + abs(player_pos[0][1] - ai_pos[0][1])
                 distance_to_player = abs(next_x - player_pos[0][0]) + abs(next_y - player_pos[0][1])
-                distance_bonus = 0 if active_effects["invisibility"] > 0 else (
-                                                                                          prev_distance - distance_to_player) * 1.0  # Stronger bonus
+                distance_bonus = 0 if active_effects["invisibility"] > 0 else (prev_distance - distance_to_player) * 1.0
                 score += distance_bonus
                 if action == ai_dir:
-                    score += 10  # Stronger bonus for continuing in the same direction
+                    score += 10  # Bonus for continuing in the same direction
                 safe_actions.append(action)
                 action_scores.append((action, score))
-            # Select AI action using the DQN agent's policy
+
+            # Choose an action from safe_actions if possible; otherwise, use fallback logic.
             if safe_actions:
                 if active_effects["ai_confusion"] > 0 and random.random() < 0.2:
-                    ai_dir = random.choice(safe_actions)
+                    chosen_action = random.choice(safe_actions)
                 else:
                     if not training_mode:
                         difficulty_epsilon = [0.4, 0.2, 0.1, 0.05, 0.01]
                         epsilon_backup = agent.epsilon
                         agent.epsilon = difficulty_epsilon[current_difficulty]
-                        ai_dir = agent.select_action(current_state, safe_actions)
+                        chosen_action = agent.select_action(current_state, safe_actions)
                         agent.epsilon = epsilon_backup
                     else:
-                        ai_dir = agent.select_action(current_state, safe_actions)
+                        chosen_action = agent.select_action(current_state, safe_actions)
             else:
-                ai_dir = agent.select_action(current_state, available_actions)
+                # Fallback: even if moves appear unsafe, pick the one with the highest (least negative) score.
+                fallback_scores = []
+                for action in available_actions:
+                    score = evaluate_move(ai_pos[0], action, player_pos, player_dir, player_trail, ai_trail)
+                    fallback_scores.append((action, score))
+                if fallback_scores:
+                    chosen_action = max(fallback_scores, key=lambda x: x[1])[0]
+                else:
+                    # No action available: keep moving in the current direction
+                    chosen_action = ai_dir
+
+            ai_dir = chosen_action
+
+            # Compute the new position and double-check that it’s safe.
             new_ai_pos = (ai_pos[0][0] + ai_dir[0], ai_pos[0][1] + ai_dir[1])
+            if (new_ai_pos[0] < 0 or new_ai_pos[0] >= COLS or new_ai_pos[1] < 0 or new_ai_pos[1] >= ROWS or
+                    new_ai_pos in player_trail or new_ai_pos in ai_trail):
+                # Try to find an alternative from safe_actions
+                for action in safe_actions:
+                    candidate = (ai_pos[0][0] + action[0], ai_pos[0][1] + action[1])
+                    if (0 <= candidate[0] < COLS and 0 <= candidate[1] < ROWS and
+                            candidate not in player_trail and candidate not in ai_trail):
+                        new_ai_pos = candidate
+                        ai_dir = action
+                        break
             ai_pos.insert(0, new_ai_pos)
             ai_trail.append(prev_ai_pos)
         ai_move_counter += 1
-        # --------------------------------------------------------------
 
         # -------------------- Reward Calculation --------------------
         prev_distance = abs(player_pos[0][0] - ai_pos[0][0]) + abs(player_pos[0][1] - ai_pos[0][1])
@@ -960,7 +997,6 @@ def game_loop(player_color, ai_color):
         # ---------------------------------------------------------------------
     return "menu"
 
-
 # =============================================================================
 #                                 MAIN FUNCTION
 # =============================================================================
@@ -979,7 +1015,6 @@ def main():
                 break
         else:
             break
-
 
 if __name__ == "__main__":
     try:
