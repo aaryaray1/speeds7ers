@@ -11,7 +11,7 @@ trails, dynamic menu, etc.) have been preserved. The reinforcement learning
 model now uses a neural network with experience replay and a target network.
 
 --------------------------------------------------------------------------------
-Author: Aarya Ray Chaudhuri, Klaudija Rackauskaite, Joaquin Godoy Monzon, Karyna Posokhina
+Author: Aarya Ray, Klaudija Rackauskaite, Joaquin Godoy Monzon, Karyna Posokhina
 Date: 2025-03-13
 --------------------------------------------------------------------------------
 """
@@ -99,6 +99,21 @@ powerup_sprites = {
     "teleport": load_sprite("sprites/tp.png", scale_factor=SCALE_FACTOR),
     "slow_time": load_sprite("sprites/time.png", scale_factor=SCALE_FACTOR)
 }
+
+# =============================================================================
+#                     LOAD ANIMATED PLAYER FRAMES
+# =============================================================================
+# Function to load all animation frames (PNG files) from a given folder.
+def load_animation_frames(folder_path):
+    frames = []
+    for filename in sorted(os.listdir(folder_path)):
+        if filename.endswith(".png"):
+            image = pygame.image.load(os.path.join(folder_path, filename)).convert_alpha()
+            frames.append(image)
+    return frames
+
+# Load player animation frames from the folder "sprites/player_animation"
+player_frames = load_animation_frames("sprites/player_animation")
 
 # =============================================================================
 #                         EXPERIENCE REPLAY BUFFER CLASS
@@ -594,7 +609,8 @@ def game_loop(player_color, ai_color):
             if pu["type"] in powerup_sprites:
                 screen.blit(powerup_sprites[pu["type"]], (pu["pos"][0] * GRID_SIZE, pu["pos"][1] * GRID_SIZE))
             else:
-                pygame.draw.rect(screen, POWERUP_COLORS[pu["type"]], (pu["pos"][0] * GRID_SIZE, pu["pos"][1] * GRID_SIZE, POWERUP_SIZE, POWERUP_SIZE))
+                pygame.draw.rect(screen, POWERUP_COLORS[pu["type"]],
+                                 (pu["pos"][0] * GRID_SIZE, pu["pos"][1] * GRID_SIZE, POWERUP_SIZE, POWERUP_SIZE))
         if powerup_message_timer > 0:
             msg_font = pygame.font.Font(None, 36)
             msg_surface = msg_font.render(powerup_message, True, (255, 255, 0))
@@ -814,8 +830,7 @@ def game_loop(player_color, ai_color):
             game_over_message = "Draw! Head-on collision!"
 
         done_flag = 1 if game_end else 0
-        replay_buffer.push(current_state, ai_dir, reward,
-                           get_state(ai_pos, player_pos, ai_dir, player_trail, ai_trail, False), done_flag)
+        replay_buffer.push(current_state, ai_dir, reward, get_state(ai_pos, player_pos, ai_dir, player_trail, ai_trail, False), done_flag)
         if training_mode and steps_survived % 5 == 0:
             loss = agent.optimize_model(replay_buffer, BATCH_SIZE)
         current_state = get_state(ai_pos, player_pos, ai_dir, player_trail, ai_trail, False)
@@ -838,10 +853,13 @@ def game_loop(player_color, ai_color):
         for pos in ai_trail:
             pygame.draw.rect(screen, COLORS[ai_color],
                              (pos[0] * GRID_SIZE, pos[1] * GRID_SIZE, GRID_SIZE, GRID_SIZE))
-        pygame.draw.rect(screen, COLORS[player_color],
-                         (player_pos[0][0] * GRID_SIZE - 1, player_pos[0][1] * GRID_SIZE - 1, GRID_SIZE + 2, GRID_SIZE + 2))
+        # Instead of drawing a rectangle for the player, draw the current animation frame.
+        current_frame_index = (pygame.time.get_ticks() // 100) % len(player_frames)
+        player_image = player_frames[current_frame_index]
+        screen.blit(player_image, (player_pos[0][0] * GRID_SIZE, player_pos[0][1] * GRID_SIZE))
         pygame.draw.rect(screen, COLORS[ai_color],
-                         (ai_pos[0][0] * GRID_SIZE - 1, ai_pos[0][1] * GRID_SIZE - 1, GRID_SIZE + 2, GRID_SIZE + 2))
+                         (ai_pos[0][0] * GRID_SIZE - 1, ai_pos[0][1] * GRID_SIZE - 1,
+                          GRID_SIZE + 2, GRID_SIZE + 2))
         font = pygame.font.Font(None, 36)
         score_text = font.render(f"Player: {len(player_trail)}  AI: {len(ai_trail)}", True, (255, 255, 255))
         screen.blit(score_text, (10, 10))
