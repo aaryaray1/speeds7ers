@@ -2,16 +2,12 @@
 # -*- coding: utf-8 -*-
 """
 ================================================================================
-Speeds7ers – Deep Q-Network Version
+                                Speeds7ers
 ================================================================================
 
-This is a Pygame-based game that pits a player against an AI whose behavior is 
-learned using a deep Q-network (DQN). All the gameplay features (power-ups, 
-trails, dynamic menu, etc.) have been preserved. The reinforcement learning 
-model now uses a neural network with experience replay and a target network.
 
 --------------------------------------------------------------------------------
-Author: OpenAI ChatGPT
+Author: Aarya Ray Chaudhuri, Klaudija Rackauskaite, Karyna Posokhina, Joaquin Godoy Monzon
 Date: 2025-03-13
 --------------------------------------------------------------------------------
 """
@@ -616,7 +612,7 @@ def game_loop(player_color, ai_color):
     # -------------------- Power-Up System Setup --------------------
     powerups = []
     max_powerups = 3
-    powerup_spawn_probability = 0.1
+    powerup_spawn_probability = 0.01
     powerup_types = ["double_speed", "invisibility", "wall_phase", "extra_life", "ai_confusion", "teleport",
                      "slow_time"]
     POWERUP_DURATIONS = {
